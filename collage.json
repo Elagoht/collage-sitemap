@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Elagoht/collage-snippets-highlighter/main/schemas/collage-plugin-manifest.schema.json",
+  "name": "elagoht/sitemap",
+  "description": "A collage plugin that serves /sitemap.xml from the pages the application registered.",
+  "repository": "https://github.com/Elagoht/collage-sitemap",
+  "config": {
+    "type": "object",
+    "description": "A collage plugin that serves /sitemap.xml from the pages the application registered.",
+    "properties": {
+      "baseURL": {
+        "type": "string",
+        "description": "BaseURL is the site's origin, as a reader's browser reaches it: \"https://example.com\". A sitemap lists absolute URLs, and the application cannot know which host it is served under. Required."
+      },
+      "exclude": {
+        "type": "array",
+        "description": "Exclude names pages to leave out: a thank-you page, a search page, anything a search engine has no reason to index.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "maxURLs": {
+        "type": "integer",
+        "description": "MaxURLs lowers the number of URLs per file below MaxURLs. Zero is MaxURLs."
+      },
+      "path": {
+        "type": "string",
+        "description": "Path is where the sitemap is served. Default \"/sitemap.xml\". The numbered files of an index are served under it without the extension: \"/sitemap/1.xml\", \"/sitemap/2.xml\"."
+      }
+    }
+  }
+}
