@@ -150,3 +150,29 @@ func TestSitemap_NeedsABaseURL(t *testing.T) {
 		t.Errorf("an application whose sitemap has no base URL served %d, want it not to start", rec.Code)
 	}
 }
+
+// TestSitemap_FallsBackToConfigBaseURL: with no BaseURL of its own, the plugin
+// takes the application's Config.BaseURL, so a site configures its origin once.
+func TestSitemap_FallsBackToConfigBaseURL(t *testing.T) {
+	app, err := collage.New(&collage.Config{
+		Server:   collage.ServerConfig{Host: "localhost", Port: 3000},
+		Template: collage.TemplateConfig{FS: fstest.MapFS{"t/p.html": {Data: []byte(`<p>x</p>`)}}, Root: "t"},
+		Locale:   collage.LocaleConfig{Default: "en", Supported: []string{"en"}},
+		BaseURL:  "https://fromconfig.example",
+		Plugins:  []collage.Plugin{sitemap.New(sitemap.Options{})}, // no BaseURL of its own
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	page := collage.NewPage("home").WithContent(collage.NewFragment("home", "p.html").Build()).WithPath("en", "/").Build()
+	if err := app.RegisterPage(page); err != nil {
+		t.Fatal(err)
+	}
+	code, body := get(t, app, "/sitemap.xml")
+	if code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 — the sitemap should take the app's Config.BaseURL", code)
+	}
+	if !strings.Contains(body, "https://fromconfig.example/") {
+		t.Errorf("sitemap = %q, want it built on the app's Config.BaseURL", body)
+	}
+}

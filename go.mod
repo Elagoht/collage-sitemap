@@ -8,4 +8,4 @@ module github.com/Elagoht/collage-sitemap
 
 go 1.26
 
-require github.com/Elagoht/collage v0.21.0
+require github.com/Elagoht/collage v0.39.0

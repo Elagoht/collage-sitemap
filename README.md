@@ -77,7 +77,8 @@ Everything but `LastMod` can come from the application's plugin configuration:
 }
 ```
 
-`baseURL` is required — a sitemap lists absolute URLs, and the application cannot
-know which host it is served under — and the application does not start without
-it. Pair it with [elagoht/robots](https://github.com/Elagoht/collage-robots) to name
+`baseURL` is the site's origin — a sitemap lists absolute URLs, and the application
+cannot know which host it is served under. Leave it empty to take the application's
+`Config.BaseURL` (collage v0.39.0); the application does not start when neither is
+set. Pair it with [elagoht/robots](https://github.com/Elagoht/collage-robots) to name
 the sitemap in `robots.txt`.

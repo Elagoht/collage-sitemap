@@ -47,7 +47,8 @@ const MaxURLs = 50000
 type Options struct {
 	// BaseURL is the site's origin, as a reader's browser reaches it:
 	// "https://example.com". A sitemap lists absolute URLs, and the application
-	// cannot know which host it is served under. Required.
+	// cannot know which host it is served under. Falls back to the application's
+	// Config.BaseURL when left empty; required only when that is also unset.
 	BaseURL string `json:"baseURL"`
 	// Path is where the sitemap is served. Default "/sitemap.xml". The numbered
 	// files of an index are served under it without the extension:
@@ -74,7 +75,7 @@ type Plugin struct {
 func New(opts Options) *Plugin { return &Plugin{opts: opts} }
 
 func (p *Plugin) Name() string                   { return Name }
-func (p *Plugin) Version() string                { return "0.1.2" }
+func (p *Plugin) Version() string                { return "0.1.3" }
 func (p *Plugin) Shutdown(context.Context) error { return nil }
 
 // ErrNoBaseURL is returned by Init when no BaseURL is configured.
@@ -91,6 +92,12 @@ func (p *Plugin) Init(_ context.Context, host collage.Host) error {
 	}
 	if p.opts.MaxURLs <= 0 || p.opts.MaxURLs > MaxURLs {
 		p.opts.MaxURLs = MaxURLs
+	}
+	// The plugin's own BaseURL wins; otherwise the application's Config.BaseURL,
+	// which collage validated and reports without a trailing slash, so a site
+	// configures its origin once rather than here again.
+	if p.opts.BaseURL == "" {
+		p.opts.BaseURL = host.BaseURL()
 	}
 	base, err := url.Parse(p.opts.BaseURL)
 	if p.opts.BaseURL == "" || err != nil || base.Scheme == "" || base.Host == "" {
