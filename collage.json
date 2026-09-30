@@ -26,6 +26,7 @@
         "type": "string",
         "description": "Path is where the sitemap is served. Default \"/sitemap.xml\". The numbered files of an index are served under it without the extension: \"/sitemap/1.xml\", \"/sitemap/2.xml\"."
       }
-    }
+    },
+    "additionalProperties": false
   }
 }
