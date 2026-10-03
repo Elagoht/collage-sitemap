@@ -176,3 +176,62 @@ func TestSitemap_FallsBackToConfigBaseURL(t *testing.T) {
 		t.Errorf("sitemap = %q, want it built on the app's Config.BaseURL", body)
 	}
 }
+
+// origins resolves two hosts, as elagoht/tenant would.
+type origins struct{}
+
+func (origins) Name() string                             { return "test/origins" }
+func (origins) Version() string                          { return "0" }
+func (origins) Init(context.Context, collage.Host) error { return nil }
+func (origins) Shutdown(context.Context) error           { return nil }
+func (origins) Origin(_ context.Context, host string) (string, bool) {
+	switch host {
+	case "a.test":
+		return "https://a.example", true
+	case "b.test":
+		return "https://b.example", true
+	}
+	return "", false
+}
+
+// Without a BaseURL of its own, the sitemap is absolute against the origin collage
+// resolves for the request's host: each tenant's sitemap names its own origin.
+func TestSitemap_OriginFollowsHost(t *testing.T) {
+	app, err := collage.New(&collage.Config{
+		Server:   collage.ServerConfig{Host: "localhost", Port: 3000},
+		Template: collage.TemplateConfig{FS: fstest.MapFS{"t/p.html": {Data: []byte(`<p>x</p>`)}}, Root: "t"},
+		Cache:    collage.CacheConfig{Enabled: true, Type: "memory", DefaultTTL: time.Hour},
+		Plugins:  []collage.Plugin{origins{}, sitemap.New(sitemap.Options{})},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.RegisterPage(collage.NewPage("about").WithContent(collage.NewFragment("about", "p.html").Build()).WithPath("en", "/about").Build()); err != nil {
+		t.Fatal(err)
+	}
+	for host, want := range map[string]string{"a.test": "https://a.example/about", "b.test": "https://b.example/about"} {
+		for range 2 {
+			rec := httptest.NewRecorder()
+			app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://"+host+"/sitemap.xml", nil))
+			if !strings.Contains(rec.Body.String(), "<loc>"+want+"</loc>") {
+				t.Errorf("%s sitemap = %s, want %s", host, rec.Body.String(), want)
+			}
+		}
+	}
+}
+
+// With neither a BaseURL nor a resolver, Init still refuses to start. Plugin Init
+// runs lazily, so the error surfaces from Start.
+func TestSitemap_NoOriginAnywhere(t *testing.T) {
+	app, err := collage.New(&collage.Config{
+		Server:   collage.ServerConfig{Host: "localhost", Port: 3000},
+		Template: collage.TemplateConfig{FS: fstest.MapFS{"t/p.html": {Data: []byte(`x`)}}, Root: "t"},
+		Plugins:  []collage.Plugin{sitemap.New(sitemap.Options{})},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Start(); !errors.Is(err, sitemap.ErrNoBaseURL) {
+		t.Errorf("Start = %v, want ErrNoBaseURL", err)
+	}
+}

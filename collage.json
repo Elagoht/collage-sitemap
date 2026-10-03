@@ -9,7 +9,7 @@
     "properties": {
       "baseURL": {
         "type": "string",
-        "description": "BaseURL is the site's origin, as a reader's browser reaches it: \"https://example.com\". A sitemap lists absolute URLs, and the application cannot know which host it is served under. Required."
+        "description": "BaseURL is the site's origin, as a reader's browser reaches it: \"https://example.com\". A sitemap lists absolute URLs, and the application cannot know which host it is served under. Falls back to the application's Config.BaseURL when left empty, and then to the origin collage resolves for the request's host (elagoht/tenant); required only when neither exists."
       },
       "exclude": {
         "type": "array",

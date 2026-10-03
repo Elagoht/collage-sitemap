@@ -48,7 +48,8 @@ type Options struct {
 	// BaseURL is the site's origin, as a reader's browser reaches it:
 	// "https://example.com". A sitemap lists absolute URLs, and the application
 	// cannot know which host it is served under. Falls back to the application's
-	// Config.BaseURL when left empty; required only when that is also unset.
+	// Config.BaseURL when left empty, and then to the origin collage resolves for
+	// the request's host (elagoht/tenant); required only when neither exists.
 	BaseURL string `json:"baseURL"`
 	// Path is where the sitemap is served. Default "/sitemap.xml". The numbered
 	// files of an index are served under it without the extension:
@@ -75,7 +76,7 @@ type Plugin struct {
 func New(opts Options) *Plugin { return &Plugin{opts: opts} }
 
 func (p *Plugin) Name() string                   { return Name }
-func (p *Plugin) Version() string                { return "0.1.3" }
+func (p *Plugin) Version() string                { return "0.2.0" }
 func (p *Plugin) Shutdown(context.Context) error { return nil }
 
 // ErrNoBaseURL is returned by Init when no BaseURL is configured.
@@ -93,17 +94,18 @@ func (p *Plugin) Init(_ context.Context, host collage.Host) error {
 	if p.opts.MaxURLs <= 0 || p.opts.MaxURLs > MaxURLs {
 		p.opts.MaxURLs = MaxURLs
 	}
-	// The plugin's own BaseURL wins; otherwise the application's Config.BaseURL,
-	// which collage validated and reports without a trailing slash, so a site
-	// configures its origin once rather than here again.
-	if p.opts.BaseURL == "" {
-		p.opts.BaseURL = host.BaseURL()
-	}
-	base, err := url.Parse(p.opts.BaseURL)
-	if p.opts.BaseURL == "" || err != nil || base.Scheme == "" || base.Host == "" {
+	// The plugin's own BaseURL wins. Without one, the origin is collage's for the
+	// request's host — Config.BaseURL, or a resolver's on a site served on
+	// several hosts — read per render.
+	if p.opts.BaseURL != "" {
+		base, err := url.Parse(p.opts.BaseURL)
+		if err != nil || base.Scheme == "" || base.Host == "" {
+			return ErrNoBaseURL
+		}
+		p.opts.BaseURL = strings.TrimSuffix(p.opts.BaseURL, "/")
+	} else if !canResolve(host) {
 		return ErrNoBaseURL
 	}
-	p.opts.BaseURL = strings.TrimSuffix(p.opts.BaseURL, "/")
 	if !strings.HasSuffix(p.opts.Path, ".xml") {
 		return fmt.Errorf("sitemap: path %q must end in .xml", p.opts.Path)
 	}
@@ -135,8 +137,30 @@ func (p *Plugin) partPattern() string {
 	return strings.TrimSuffix(p.opts.Path, ".xml") + "/{part}"
 }
 
-func (p *Plugin) partURL(n int) string {
-	return p.opts.BaseURL + strings.TrimSuffix(p.opts.Path, ".xml") + "/" + partName(n)
+// canResolve reports whether collage can name an origin without the plugin's
+// own BaseURL: from Config.BaseURL, or per host from a plugin implementing
+// collage.OriginResolver.
+func canResolve(host collage.Host) bool {
+	if host.BaseURL() != "" {
+		return true
+	}
+	origins, ok := host.(collage.Origins)
+	return ok && origins.Dynamic()
+}
+
+// base is the origin this render's URLs are absolute against.
+func (p *Plugin) base(rc *collage.RenderContext) (string, error) {
+	if p.opts.BaseURL != "" {
+		return p.opts.BaseURL, nil
+	}
+	if origin := collage.BaseURL(rc); origin != "" {
+		return origin, nil
+	}
+	return "", ErrNoBaseURL
+}
+
+func (p *Plugin) partURL(base string, n int) string {
+	return base + strings.TrimSuffix(p.opts.Path, ".xml") + "/" + partName(n)
 }
 
 func partName(n int) string { return strconv.Itoa(n) + ".xml" }
@@ -153,7 +177,7 @@ type alternate struct {
 }
 
 // entries lists every URL the sitemap holds, in a stable order.
-func (p *Plugin) entries(ctx context.Context) ([]entry, error) {
+func (p *Plugin) entries(ctx context.Context, base string) ([]entry, error) {
 	excluded := make(map[string]bool, len(p.opts.Exclude))
 	for _, name := range p.opts.Exclude {
 		excluded[name] = true
@@ -186,14 +210,14 @@ func (p *Plugin) entries(ctx context.Context) ([]entry, error) {
 			var alts []alternate
 			if len(group) > 1 {
 				for _, u := range group {
-					alts = append(alts, alternate{locale: u.Locale, href: p.opts.BaseURL + u.Path})
+					alts = append(alts, alternate{locale: u.Locale, href: base + u.Path})
 					if u.Locale == defaultLocale {
-						alts = append(alts, alternate{locale: "x-default", href: p.opts.BaseURL + u.Path})
+						alts = append(alts, alternate{locale: "x-default", href: base + u.Path})
 					}
 				}
 			}
 			for _, u := range group {
-				e := entry{loc: p.opts.BaseURL + u.Path, alternates: alts}
+				e := entry{loc: base + u.Path, alternates: alts}
 				if p.opts.LastMod != nil {
 					e.lastMod = p.opts.LastMod(ctx, page.Name, u)
 				}
@@ -222,8 +246,12 @@ func paramsKey(params map[string]string) string {
 
 // serveIndex answers the sitemap's own path: the URLs themselves while they fit
 // in one file, an index of the numbered files once they do not.
-func (p *Plugin) serveIndex(ctx context.Context, _ *collage.RenderContext) ([]byte, []string, error) {
-	entries, err := p.entries(ctx)
+func (p *Plugin) serveIndex(ctx context.Context, rc *collage.RenderContext) ([]byte, []string, error) {
+	base, err := p.base(rc)
+	if err != nil {
+		return nil, nil, err
+	}
+	entries, err := p.entries(ctx, base)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -235,7 +263,7 @@ func (p *Plugin) serveIndex(ctx context.Context, _ *collage.RenderContext) ([]by
 	b.WriteString(`<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
 	for n := 1; n <= parts(len(entries), p.opts.MaxURLs); n++ {
 		b.WriteString("  <sitemap><loc>")
-		escape(&b, p.partURL(n))
+		escape(&b, p.partURL(base, n))
 		b.WriteString("</loc></sitemap>\n")
 	}
 	b.WriteString("</sitemapindex>\n")
@@ -249,7 +277,11 @@ func (p *Plugin) servePart(ctx context.Context, rc *collage.RenderContext) ([]by
 	if !ok || err != nil || n < 1 {
 		return nil, nil, collage.ErrNotFound
 	}
-	entries, err := p.entries(ctx)
+	base, err := p.base(rc)
+	if err != nil {
+		return nil, nil, err
+	}
+	entries, err := p.entries(ctx, base)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -261,10 +293,10 @@ func (p *Plugin) servePart(ctx context.Context, rc *collage.RenderContext) ([]by
 	return urlset(entries[from:to]), []string{Tag}, nil
 }
 
-// partParams lists the numbered files a static build writes: none while the
-// URLs fit in one.
+// partParams lists the numbered files a static build writes (only their count
+// matters, so no origin is needed): none while the URLs fit in one.
 func (p *Plugin) partParams(ctx context.Context, _ string) ([]map[string]string, error) {
-	entries, err := p.entries(ctx)
+	entries, err := p.entries(ctx, "")
 	if err != nil {
 		return nil, err
 	}

@@ -11,7 +11,7 @@ app, err := collage.New(&collage.Config{
 })
 ```
 
-Requires collage v0.21.0 or later.
+Requires collage v0.21.0 or later (v0.42.0 for per-host origins).
 
 ## What it lists
 
@@ -79,6 +79,9 @@ Everything but `LastMod` can come from the application's plugin configuration:
 
 `baseURL` is the site's origin — a sitemap lists absolute URLs, and the application
 cannot know which host it is served under. Leave it empty to take the application's
-`Config.BaseURL` (collage v0.39.0); the application does not start when neither is
-set. Pair it with [elagoht/robots](https://github.com/Elagoht/collage-robots) to name
+`Config.BaseURL` (collage v0.39.0). On a site served on several hosts, with a plugin
+that resolves origins per host (elagoht/tenant), the sitemap follows
+`collage.BaseURL` and names the origin of the host it is requested on. The
+application does not start when there is no `baseURL`, no `Config.BaseURL` and no
+resolver. Pair it with [elagoht/robots](https://github.com/Elagoht/collage-robots) to name
 the sitemap in `robots.txt`.
