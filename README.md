@@ -11,7 +11,7 @@ app, err := collage.New(&collage.Config{
 })
 ```
 
-Requires collage v0.21.0 or later (v0.42.0 for per-host origins).
+Requires collage v0.50.0 or later.
 
 ## What it lists
 

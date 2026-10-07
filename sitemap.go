@@ -76,7 +76,7 @@ type Plugin struct {
 func New(opts Options) *Plugin { return &Plugin{opts: opts} }
 
 func (p *Plugin) Name() string                   { return Name }
-func (p *Plugin) Version() string                { return "0.2.0" }
+func (p *Plugin) Version() string                { return "0.2.1" }
 func (p *Plugin) Shutdown(context.Context) error { return nil }
 
 // ErrNoBaseURL is returned by Init when no BaseURL is configured.
@@ -85,9 +85,11 @@ var ErrNoBaseURL = errors.New("sitemap: BaseURL is required: a sitemap lists abs
 // Init reads the configuration and registers the sitemap and its numbered files.
 func (p *Plugin) Init(_ context.Context, host collage.Host) error {
 	p.host = host
-	if err := host.Config(&p.opts); err != nil {
+	opts, err := collage.PluginConfig(host, p.opts)
+	if err != nil {
 		return err
 	}
+	p.opts = opts
 	if p.opts.Path == "" {
 		p.opts.Path = "/sitemap.xml"
 	}
