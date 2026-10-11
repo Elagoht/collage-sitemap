@@ -3,6 +3,7 @@
   "name": "elagoht/sitemap",
   "description": "A collage plugin that serves /sitemap.xml from the pages the application registered.",
   "repository": "https://github.com/Elagoht/collage-sitemap",
+  "setup": "A sitemap lists absolute URLs, so it needs the site's origin: set `BASE_URL` in a project `collage new` made (it becomes `Config.BaseURL`), or `\"baseURL\"` in this plugin's section of `plugins-config.json`.",
   "config": {
     "type": "object",
     "description": "A collage plugin that serves /sitemap.xml from the pages the application registered.",
