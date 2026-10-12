@@ -5,13 +5,12 @@ registered.
 
 ```go
 app, err := collage.New(&collage.Config{
-	Plugins: []collage.Plugin{sitemap.New(sitemap.Options{
-		BaseURL: "https://example.com",
-	})},
+	BaseURL: "https://example.com",
+	Plugins: []collage.Plugin{sitemap.New(sitemap.Options{})},
 })
 ```
 
-Requires collage v0.60.0 or later.
+Requires collage v0.61.0 or later.
 
 ## What it lists
 
@@ -28,7 +27,6 @@ out others by name:
 
 ```go
 sitemap.New(sitemap.Options{
-	BaseURL: "https://example.com",
 	Exclude: []string{"thanks", "search"},
 })
 ```
@@ -69,7 +67,6 @@ Everything but `LastMod` can come from the application's plugin configuration:
 ```json
 {
   "elagoht/sitemap": {
-    "baseURL": "https://example.com",
     "path": "/sitemap.xml",
     "exclude": ["thanks"],
     "maxURLs": 50000
@@ -77,11 +74,19 @@ Everything but `LastMod` can come from the application's plugin configuration:
 }
 ```
 
-`baseURL` is the site's origin — a sitemap lists absolute URLs, and the application
-cannot know which host it is served under. Leave it empty to take the application's
-`Config.BaseURL` (collage v0.39.0). On a site served on several hosts, with a plugin
-that resolves origins per host (elagoht/tenant), the sitemap follows
-`collage.BaseURL` and names the origin of the host it is requested on. The
-application does not start when there is no `baseURL`, no `Config.BaseURL` and no
-resolver. Pair it with [elagoht/robots](https://github.com/Elagoht/collage-robots) to name
+A sitemap lists absolute URLs, against the origin collage resolves for the
+request's host: the application's `Config.BaseURL` (`BASE_URL`), or, on a site
+served on several hosts with a plugin that resolves origins per host
+(elagoht/tenant), the origin of the host it is requested on. The application does
+not start when there is no `Config.BaseURL` and no resolver. `maxURLs` 0 is
+50,000; a negative value stops the application. Pair it with [elagoht/robots](https://github.com/Elagoht/collage-robots) to name
 the sitemap in `robots.txt`.
+
+## Changed in v0.3.0
+
+- The `baseURL` key and `Options.BaseURL` are removed. Set the application's
+  `Config.BaseURL` (`BASE_URL`) instead, or register an origin resolver; a
+  configuration that still has `baseURL` stops the application with
+  `unknown key "baseURL"`. A malformed origin is now refused by collage itself.
+- `ErrNoBaseURL` means only "no origin anywhere", and says so.
+- A negative `maxURLs` is an error; it used to mean 50,000.

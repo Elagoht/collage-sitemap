@@ -2,10 +2,12 @@
 // application registered.
 //
 //	app, err := collage.New(&collage.Config{
-//		Plugins: []collage.Plugin{sitemap.New(sitemap.Options{
-//			BaseURL: "https://example.com",
-//		})},
+//		BaseURL: "https://example.com",
+//		Plugins: []collage.Plugin{sitemap.New(sitemap.Options{})},
 //	})
+//
+// URLs are absolute against the origin collage resolves for the request:
+// Config.BaseURL, or per host the origin an OriginResolver plugin gives.
 //
 // Every page with a path is listed, in every locale it has one, and a page whose
 // path has a {param} is listed once for each value its WithStaticParams returns —
@@ -23,7 +25,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -45,12 +46,6 @@ const MaxURLs = 50000
 
 // Options configures the plugin.
 type Options struct {
-	// BaseURL is the site's origin, as a reader's browser reaches it:
-	// "https://example.com". A sitemap lists absolute URLs, and the application
-	// cannot know which host it is served under. Falls back to the application's
-	// Config.BaseURL when left empty, and then to the origin collage resolves for
-	// the request's host (elagoht/tenant); required only when neither exists.
-	BaseURL string `json:"baseURL"`
 	// Path is where the sitemap is served. Default "/sitemap.xml". The numbered
 	// files of an index are served under it without the extension:
 	// "/sitemap/1.xml", "/sitemap/2.xml".
@@ -61,7 +56,8 @@ type Options struct {
 	// LastMod returns when the page at u last changed, or the zero time when it
 	// does not know; a zero time leaves <lastmod> out. Optional, and only from Go.
 	LastMod func(ctx context.Context, page string, u collage.PageURL) time.Time `json:"-"`
-	// MaxURLs lowers the number of URLs per file below MaxURLs. Zero is MaxURLs.
+	// MaxURLs lowers the number of URLs per file below MaxURLs. Zero is MaxURLs,
+	// a negative number an error, and one above MaxURLs is MaxURLs.
 	MaxURLs int `json:"maxURLs"`
 }
 
@@ -76,11 +72,12 @@ type Plugin struct {
 func New(opts Options) *Plugin { return &Plugin{opts: opts} }
 
 func (p *Plugin) Name() string                   { return Name }
-func (p *Plugin) Version() string                { return "0.2.3" }
+func (p *Plugin) Version() string                { return "0.3.0" }
 func (p *Plugin) Shutdown(context.Context) error { return nil }
 
-// ErrNoBaseURL is returned by Init when no BaseURL is configured.
-var ErrNoBaseURL = errors.New("sitemap: BaseURL is required: a sitemap lists absolute URLs")
+// ErrNoBaseURL is returned by Init when the application has no origin to make
+// URLs absolute against: no Config.BaseURL and no OriginResolver plugin.
+var ErrNoBaseURL = errors.New("sitemap: no origin: set Config.BaseURL (BASE_URL) or register an OriginResolver plugin; a sitemap lists absolute URLs")
 
 // Init reads the configuration and registers the sitemap and its numbered files.
 func (p *Plugin) Init(_ context.Context, host collage.Host) error {
@@ -93,19 +90,15 @@ func (p *Plugin) Init(_ context.Context, host collage.Host) error {
 	if p.opts.Path == "" {
 		p.opts.Path = "/sitemap.xml"
 	}
-	if p.opts.MaxURLs <= 0 || p.opts.MaxURLs > MaxURLs {
+	if p.opts.MaxURLs < 0 {
+		return fmt.Errorf("sitemap: maxURLs %d is negative", p.opts.MaxURLs)
+	}
+	if p.opts.MaxURLs == 0 || p.opts.MaxURLs > MaxURLs {
 		p.opts.MaxURLs = MaxURLs
 	}
-	// The plugin's own BaseURL wins. Without one, the origin is collage's for the
-	// request's host — Config.BaseURL, or a resolver's on a site served on
-	// several hosts — read per render.
-	if p.opts.BaseURL != "" {
-		base, err := url.Parse(p.opts.BaseURL)
-		if err != nil || base.Scheme == "" || base.Host == "" {
-			return ErrNoBaseURL
-		}
-		p.opts.BaseURL = strings.TrimSuffix(p.opts.BaseURL, "/")
-	} else if !canResolve(host) {
+	// The origin is collage's for the request's host — Config.BaseURL, or a
+	// resolver's on a site served on several hosts — read per render.
+	if !canResolve(host) {
 		return ErrNoBaseURL
 	}
 	if !strings.HasSuffix(p.opts.Path, ".xml") {
@@ -139,9 +132,8 @@ func (p *Plugin) partPattern() string {
 	return strings.TrimSuffix(p.opts.Path, ".xml") + "/{part}"
 }
 
-// canResolve reports whether collage can name an origin without the plugin's
-// own BaseURL: from Config.BaseURL, or per host from a plugin implementing
-// collage.OriginResolver.
+// canResolve reports whether collage can name an origin: from Config.BaseURL,
+// or per host from a plugin implementing collage.OriginResolver.
 func canResolve(host collage.Host) bool {
 	if host.BaseURL() != "" {
 		return true
@@ -151,11 +143,8 @@ func canResolve(host collage.Host) bool {
 
 // base is the origin this render's URLs are absolute against.
 func (p *Plugin) base(rc *collage.RenderContext) (string, error) {
-	if p.opts.BaseURL != "" {
-		return p.opts.BaseURL, nil
-	}
 	if origin := collage.BaseURL(rc); origin != "" {
-		return origin, nil
+		return strings.TrimSuffix(origin, "/"), nil
 	}
 	return "", ErrNoBaseURL
 }

@@ -3,15 +3,11 @@
   "name": "elagoht/sitemap",
   "description": "A collage plugin that serves /sitemap.xml from the pages the application registered.",
   "repository": "https://github.com/Elagoht/collage-sitemap",
-  "setup": "A sitemap lists absolute URLs, so it needs the site's origin: set `BASE_URL` in a project `collage new` made (it becomes `Config.BaseURL`), or `\"baseURL\"` in this plugin's section of `plugins-config.json`.",
+  "setup": "A sitemap lists absolute URLs, so it needs the site's origin: set `BASE_URL` in a project `collage new` made (it becomes `Config.BaseURL`), or register an origin resolver such as `elagoht/tenant`. Without one the application does not start.",
   "config": {
     "type": "object",
     "description": "A collage plugin that serves /sitemap.xml from the pages the application registered.",
     "properties": {
-      "baseURL": {
-        "type": "string",
-        "description": "BaseURL is the site's origin, as a reader's browser reaches it: \"https://example.com\". A sitemap lists absolute URLs, and the application cannot know which host it is served under. Falls back to the application's Config.BaseURL when left empty, and then to the origin collage resolves for the request's host (elagoht/tenant); required only when neither exists."
-      },
       "exclude": {
         "type": "array",
         "description": "Exclude names pages to leave out: a thank-you page, a search page, anything a search engine has no reason to index.",
@@ -21,7 +17,7 @@
       },
       "maxURLs": {
         "type": "integer",
-        "description": "MaxURLs lowers the number of URLs per file below MaxURLs. Zero is MaxURLs."
+        "description": "MaxURLs lowers the number of URLs per file below MaxURLs. Zero is MaxURLs, a negative number an error, and one above MaxURLs is MaxURLs."
       },
       "path": {
         "type": "string",
