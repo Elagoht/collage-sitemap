@@ -76,7 +76,7 @@ type Plugin struct {
 func New(opts Options) *Plugin { return &Plugin{opts: opts} }
 
 func (p *Plugin) Name() string                   { return Name }
-func (p *Plugin) Version() string                { return "0.2.2" }
+func (p *Plugin) Version() string                { return "0.2.3" }
 func (p *Plugin) Shutdown(context.Context) error { return nil }
 
 // ErrNoBaseURL is returned by Init when no BaseURL is configured.
@@ -146,8 +146,7 @@ func canResolve(host collage.Host) bool {
 	if host.BaseURL() != "" {
 		return true
 	}
-	origins, ok := host.(collage.Origins)
-	return ok && origins.Dynamic()
+	return host.MultiOrigin()
 }
 
 // base is the origin this render's URLs are absolute against.

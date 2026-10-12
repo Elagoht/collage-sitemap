@@ -128,11 +128,7 @@ func TestSitemap_Index(t *testing.T) {
 func TestSitemap_Export(t *testing.T) {
 	app := site(t, sitemap.Options{BaseURL: "https://example.com", MaxURLs: 3}, 5)
 	out := t.TempDir()
-	builder, err := collage.NewBuilder(app, collage.BuildOptions{OutDir: out})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := builder.Build(context.Background()); err != nil && !errors.Is(err, collage.ErrBuildFindings) {
+	if _, err := collage.Build(context.Background(), app, collage.BuildOptions{OutDir: out}); err != nil && !errors.Is(err, collage.ErrBuildFindings) {
 		t.Logf("build: %v", err)
 	}
 	for _, f := range []string{"sitemap.xml", "sitemap/1.xml", "sitemap/4.xml"} {
